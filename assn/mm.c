@@ -178,14 +178,12 @@ void * find_fit(size_t asize)
  **********************************************************/
 void split_and_place(void* bp, size_t a_new_size)
 {
-    size_t old_size = GET_SIZE(bp);
+    size_t old_size = GET_SIZE(HDRP(bp));
     size_t f_new_size = old_size - a_new_size;
     // if old_size - a_new_size >= MINBLOCK SIZE, do split
     if (f_new_size < MINBLOCKSIZE) {
         size_t bsize = GET_SIZE(HDRP(bp));
-        printf("1\n");
         PUT(HDRP(bp), PACK(bsize, 1));
-        printf("2\n");
         PUT(FTRP(bp), PACK(bsize, 1));
     } else {
         char * alloc_head = HDRP(bp);
@@ -193,15 +191,10 @@ void split_and_place(void* bp, size_t a_new_size)
         char * free_head = alloc_head + a_new_size;
         char * alloc_foot = free_head - WSIZE;
 
-        printf("alloc_head: %d\n", alloc_head);
         PUT(alloc_head, PACK(a_new_size, 1));
-        printf("free_foot: %d\n", free_foot);
         PUT(free_foot, PACK(f_new_size,0));
-        printf("c\n");
         PUT(free_head, PACK(f_new_size,0));
-        printf("d\n");
         PUT(alloc_foot, PACK(a_new_size, 1));
-        printf("e\n");
 
     }
 }
