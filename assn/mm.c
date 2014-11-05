@@ -24,15 +24,15 @@
  ********************************************************/
 team_t team = {
     /* Team name */
-    "",
+    "RASh",
     /* First member's full name */
-    "",
+    "Ryan Santhirarajan ",
     /* First member's email address */
-    "",
+    "ryan.santhirarajan@mail.utoronto.ca",
     /* Second member's full name (leave blank if none) */
-    "",
+    "Ashkan Parcham Kashani",
     /* Second member's email address (leave blank if none) */
-    ""
+    "ashkan.parchamkashani@mail.utoronto.ca"
 };
 
 /*************************************************************************
