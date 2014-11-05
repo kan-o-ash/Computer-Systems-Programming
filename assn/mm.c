@@ -24,15 +24,15 @@
  ********************************************************/
 team_t team = {
     /* Team name */
-    "",
+    "RASH",
     /* First member's full name */
-    "",
+    "Ryan Santhiraraarararaajan",
     /* First member's email address */
-    "",
+    "fea",
     /* Second member's full name (leave blank if none) */
-    "",
+    "Ashkan Parcham Kashani",
     /* Second member's email address (leave blank if none) */
-    ""
+    "fear"
 };
 
 /*************************************************************************
@@ -42,6 +42,7 @@ team_t team = {
 #define WSIZE       sizeof(void *)            /* word size (bytes) */
 #define DSIZE       (2 * WSIZE)            /* doubleword size (bytes) */
 #define CHUNKSIZE   (1<<7)      /* initial heap size (bytes) */
+#define MINBLOCKSIZE  (DSIZE)
 
 #define MAX(x,y) ((x) > (y)?(x) :(y))
 
@@ -171,6 +172,42 @@ void * find_fit(size_t asize)
 }
 
 /**********************************************************
+ * split_and_place
+ * Split the block into new_size and GET_SIZE(bp) minus new_size
+ * then allocate and free the new areas
+ **********************************************************/
+void split_and_place(void* bp, size_t a_new_size)
+{
+    size_t old_size = GET_SIZE(bp);
+    size_t f_new_size = old_size - a_new_size;
+    // if old_size - a_new_size >= MINBLOCK SIZE, do split
+    if (f_new_size < MINBLOCKSIZE) {
+        size_t bsize = GET_SIZE(HDRP(bp));
+        printf("1\n");
+        PUT(HDRP(bp), PACK(bsize, 1));
+        printf("2\n");
+        PUT(FTRP(bp), PACK(bsize, 1));
+    } else {
+        char * alloc_head = HDRP(bp);
+        char * free_foot = FTRP(bp);
+        char * free_head = alloc_head + a_new_size;
+        char * alloc_foot = free_head - WSIZE;
+
+        printf("alloc_head: %d\n", alloc_head);
+        PUT(alloc_head, PACK(a_new_size, 1));
+        printf("free_foot: %d\n", free_foot);
+        PUT(free_foot, PACK(f_new_size,0));
+        printf("c\n");
+        PUT(free_head, PACK(f_new_size,0));
+        printf("d\n");
+        PUT(alloc_foot, PACK(a_new_size, 1));
+        printf("e\n");
+
+    }
+}
+
+
+/**********************************************************
  * place
  * Mark the block as allocated
  **********************************************************/
@@ -225,7 +262,8 @@ void *mm_malloc(size_t size)
 
     /* Search the free list for a fit */
     if ((bp = find_fit(asize)) != NULL) {
-        place(bp, asize);
+        split_and_place(bp, asize);
+        // place(bp, asize);
         return bp;
     }
 
