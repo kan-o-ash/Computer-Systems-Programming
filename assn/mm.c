@@ -42,7 +42,7 @@ team_t team = {
 #define WSIZE       sizeof(void *)            /* word size (bytes) */
 #define DSIZE       (2 * WSIZE)            /* doubleword size (bytes) */
 #define CHUNKSIZE   (1<<7)      /* initial heap size (bytes) */
-#define MINBLOCKSIZE  (DSIZE)
+#define MINBLOCKSIZE  (2*DSIZE)
 
 #define MAX(x,y) ((x) > (y)?(x) :(y))
 
@@ -61,11 +61,16 @@ team_t team = {
 #define HDRP(bp)        ((char *)(bp) - WSIZE)
 #define FTRP(bp)        ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE)
 
+/* Given block ptr bp, compute address of its predecessor pointer and successor pointer */
+#define PRED(bp)        ((bp))
+#define SUCC(bp)        ((char *)bp + WSIZE)
+
 /* Given block ptr bp, compute address of next and previous blocks */
 #define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE)))
 #define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE(((char *)(bp) - DSIZE)))
 
 void* heap_listp = NULL;
+void* free_list = NULL;
 
 /**********************************************************
  * mm_init
@@ -85,6 +90,42 @@ void* heap_listp = NULL;
      return 0;
  }
 
+
+/**********************************************************
+ * add_to_free_list
+ * Update the old top of list's pred to point to bp, 
+ * Update bp's succ to point to the old top of list
+ * Updates the free_list pointer to point to bp
+ **********************************************************/
+void add_to_free_list(void *bp) {
+
+    if (free_list != NULL) 
+        PUT(PRED(free_list),  bp);
+    PUT(SUCC(bp), free_list);
+    free_list = bp;
+}
+/**********************************************************
+ * remove_from_free_list 
+ * Update bp's pred's succ to be bp's succ
+ * Update bp's succ's pred to be bp's pred
+ *
+ **********************************************************/
+void remove_from_free_list(void *bp) {
+    if (bp == NULL) return;
+    if (PRED(bp) == NULL) return;
+    if (SUCC(bp) == NULL) return;
+
+    char * pred_addr = GET(PRED(bp));
+    char * succ_addr = GET(SUCC(bp));
+
+    if (pred_addr != NULL) {
+        PUT(SUCC(pred_addr), succ_addr);
+    }
+    if (succ_addr != NULL) {
+        PUT(PRED(succ_addr), pred_addr);
+    }
+}
+
 /**********************************************************
  * coalesce
  * Covers the 4 cases discussed in the text:
@@ -95,8 +136,10 @@ void* heap_listp = NULL;
  **********************************************************/
 void *coalesce(void *bp)
 {
-    size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));
-    size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));
+    char * prev_bp = PREV_BLKP(bp);
+    char * next_bp = NEXT_BLKP(bp);
+    size_t prev_alloc = GET_ALLOC(FTRP(prev_bp));
+    size_t next_alloc = GET_ALLOC(HDRP(next_bp));
     size_t size = GET_SIZE(HDRP(bp));
 
     if (prev_alloc && next_alloc) {       /* Case 1 */
@@ -107,6 +150,8 @@ void *coalesce(void *bp)
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
         PUT(HDRP(bp), PACK(size, 0));
         PUT(FTRP(bp), PACK(size, 0));
+        //Need to remove all pointer to next bp
+        remove_from_free_list(next_bp);
         return (bp);
     }
 
@@ -114,6 +159,8 @@ void *coalesce(void *bp)
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));
         PUT(FTRP(bp), PACK(size, 0));
         PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));
+        //Need to remove all pointers to current bp
+        remove_from_free_list(bp);
         return (PREV_BLKP(bp));
     }
 
@@ -122,6 +169,9 @@ void *coalesce(void *bp)
             GET_SIZE(FTRP(NEXT_BLKP(bp)))  ;
         PUT(HDRP(PREV_BLKP(bp)), PACK(size,0));
         PUT(FTRP(NEXT_BLKP(bp)), PACK(size,0));
+        //Need to remove all pointers for current and next bp
+        remove_from_free_list(bp);
+        remove_from_free_list(next_bp);
         return (PREV_BLKP(bp));
     }
 }
@@ -147,6 +197,9 @@ void *extend_heap(size_t words)
     PUT(FTRP(bp), PACK(size, 0));                // free block footer
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));        // new epilogue header
 
+    /* Place at top of free list  */
+    add_to_free_list(bp);
+
     /* Coalesce if the previous block was free */
     return coalesce(bp);
 }
@@ -160,8 +213,9 @@ void *extend_heap(size_t words)
  **********************************************************/
 void * find_fit(size_t asize)
 {
-    void *bp;
-    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp))
+    void *bp = free_list;
+    if (bp == NULL || SUCC(bp) == NULL) return;
+    for (; GET(SUCC(bp)) != NULL; bp = GET(SUCC(bp)))
     {
         if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp))))
         {
@@ -180,11 +234,17 @@ void split_and_place(void* bp, size_t a_new_size)
 {
     size_t old_size = GET_SIZE(HDRP(bp));
     size_t f_new_size = old_size - a_new_size;
+
+    // remove this block from the explicit free list
+    remove_from_free_list(bp);
+
     // if old_size - a_new_size >= MINBLOCK SIZE, do split
     if (f_new_size < MINBLOCKSIZE) {
         size_t bsize = GET_SIZE(HDRP(bp));
         PUT(HDRP(bp), PACK(bsize, 1));
         PUT(FTRP(bp), PACK(bsize, 1));
+        // free block completely removed, so no need to add to free list
+
     } else {
         char * alloc_head = HDRP(bp);
         char * free_foot = FTRP(bp);
@@ -195,7 +255,7 @@ void split_and_place(void* bp, size_t a_new_size)
         PUT(free_foot, PACK(f_new_size,0));
         PUT(free_head, PACK(f_new_size,0));
         PUT(alloc_foot, PACK(a_new_size, 1));
-
+        add_to_free_list(NEXT_BLKP(bp));
     }
 }
 
@@ -225,6 +285,7 @@ void mm_free(void *bp)
     size_t size = GET_SIZE(HDRP(bp));
     PUT(HDRP(bp), PACK(size,0));
     PUT(FTRP(bp), PACK(size,0));
+    add_to_free_list(bp);
     coalesce(bp);
 }
 
