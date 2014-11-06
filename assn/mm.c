@@ -256,7 +256,7 @@ void *mm_malloc(size_t size)
     /* Search the free list for a fit */
     if ((bp = find_fit(asize)) != NULL) {
         split_and_place(bp, asize);
-        // place(bp, asize);
+        //place(bp, asize);
         return bp;
     }
 
@@ -264,7 +264,8 @@ void *mm_malloc(size_t size)
     extendsize = MAX(asize, CHUNKSIZE);
     if ((bp = extend_heap(extendsize/WSIZE)) == NULL)
         return NULL;
-    place(bp, asize);
+    //place(bp, asize);
+    split_and_place(bp, asize);
     return bp;
 
 }
