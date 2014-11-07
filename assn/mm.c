@@ -62,8 +62,12 @@ team_t team = {
 #define FTRP(bp)        ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE)
 
 /* Given block ptr bp, compute address of its predecessor pointer and successor pointer */
-#define PRED(bp)        ((bp))
-#define SUCC(bp)        ((char *)bp + WSIZE)
+#define PRED(bp)        ((char *) bp)
+#define SUCC(bp)        (((char *)bp) + WSIZE)
+
+/* Finds next or previous free block in the explicit free list */
+#define PREV_FR_BP(bp)   ((char *) GET(PRED((char *) bp)))
+#define NEXT_FR_BP(bp)   ((char *) GET(SUCC((char *) bp)))
 
 /* Given block ptr bp, compute address of next and previous blocks */
 #define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE(((char *)(bp) - WSIZE)))
@@ -98,10 +102,29 @@ void* free_list = NULL;
  * Updates the free_list pointer to point to bp
  **********************************************************/
 void add_to_free_list(void *bp) {
+    printf("in add_to_free - Free list: %p\n", free_list);
+    printf("in add_to_free - bp: %p\n", bp);
 
-    if (free_list != NULL) 
-        PUT(PRED(free_list),  bp);
+    printf("in add_to_tree - allocated? %d\n", GET_ALLOC(HDRP(bp)));
+    if (free_list == NULL) {
+        PUT(SUCC(bp), NULL);
+        PUT(PRED(bp), NULL);
+        free_list = bp;
+        return;
+    }
+
+    // char * 
+    // for (;;) {
+    //     if (SUCC(bp) == NULL) return NULL;
+    //     if (GET(SUCC(bp)) == NULL) return NULL;
+    //     bp = GET(SUCC(bp));
+    // }
+
+    PUT(PRED(free_list), bp);
     PUT(SUCC(bp), free_list);
+    PUT(PRED(bp), NULL);
+    printf("add_to_free - addr of prev: %p\n", PREV_FR_BP(bp));
+    printf("add_to_free - addr of succ: %p\n", NEXT_FR_BP(bp));
     free_list = bp;
 }
 /**********************************************************
@@ -115,8 +138,8 @@ void remove_from_free_list(void *bp) {
     if (PRED(bp) == NULL) return;
     if (SUCC(bp) == NULL) return;
 
-    char * pred_addr = GET(PRED(bp));
-    char * succ_addr = GET(SUCC(bp));
+    char * pred_addr = PREV_FR_BP(bp);
+    char * succ_addr = NEXT_FR_BP(bp);
 
     if (pred_addr != NULL) {
         PUT(SUCC(pred_addr), succ_addr);
@@ -198,8 +221,13 @@ void *extend_heap(size_t words)
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));        // new epilogue header
 
     /* Place at top of free list  */
+
     add_to_free_list(bp);
 
+    printf("add_to_free being called in extend()\n");
+    printf("extend - bp: %p\n", bp);
+    printf("extend - addr of prev: %p\n", PREV_FR_BP(bp));
+    printf("extend - addr of next: %p\n", NEXT_FR_BP(bp));
     /* Coalesce if the previous block was free */
     return coalesce(bp);
 }
@@ -213,14 +241,36 @@ void *extend_heap(size_t words)
  **********************************************************/
 void * find_fit(size_t asize)
 {
-    void *bp = free_list;
-    if (bp == NULL || SUCC(bp) == NULL) return;
-    for (; GET(SUCC(bp)) != NULL; bp = GET(SUCC(bp)))
-    {
-        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp))))
-        {
+    // void *bp = free_list;
+    // if (bp == NULL || SUCC(bp) == NULL) return;
+    // for (; NEXT_FR_BP(bp) != NULL; bp = NEXT_FR_BP(bp))
+    // {
+    //     if (asize <= GET_SIZE(HDRP(bp))) {
+    //         if (!GET_ALLOC(HDRP(bp))) {
+    //             return bp;
+    //         }
+    //     }
+    // }
+    // return NULL;
+
+    if (!free_list) return NULL;
+    
+    char * bp = free_list;
+
+    printf("find-fit - free_list: %p\n", bp);
+    for (;;) {
+        printf("find-fit - bp in loop: %p\n", bp);
+        printf("find_fit - addr of prev: %p\n", PREV_FR_BP(bp));
+        printf("find_fit - addr of next: %p\n", NEXT_FR_BP(bp));
+        printf("asize: %d, free_b_size: %d\n",asize, GET_SIZE(HDRP(bp)));
+        printf("allocated? %d\n", GET_ALLOC(HDRP(bp)));
+        if ((asize <= GET_SIZE(HDRP(bp))) && (!GET_ALLOC(HDRP(bp))) ) {
+            printf("FOUND A SPACE");
             return bp;
         }
+        if (SUCC(bp) == NULL) return NULL;
+        if (GET(SUCC(bp)) == NULL) return NULL;
+        bp = GET(SUCC(bp));
     }
     return NULL;
 }
@@ -255,7 +305,12 @@ void split_and_place(void* bp, size_t a_new_size)
         PUT(free_foot, PACK(f_new_size,0));
         PUT(free_head, PACK(f_new_size,0));
         PUT(alloc_foot, PACK(a_new_size, 1));
-        add_to_free_list(NEXT_BLKP(bp));
+        add_to_free_list(free_head + WSIZE);
+
+        printf("add_to_free being called in split_place()\n");
+        printf("split_place - bp: %p\n", NEXT_BLKP(bp));
+        printf("split_place - addr of prev: %p\n", PREV_FR_BP(NEXT_BLKP(bp)));
+        printf("split_place - addr of next: %p\n", NEXT_FR_BP(NEXT_BLKP(bp)));
     }
 }
 
@@ -279,13 +334,19 @@ void place(void* bp, size_t asize)
  **********************************************************/
 void mm_free(void *bp)
 {
+    printf("\n FREE CALLED \n\n");
     if(bp == NULL){
       return;
     }
     size_t size = GET_SIZE(HDRP(bp));
     PUT(HDRP(bp), PACK(size,0));
     PUT(FTRP(bp), PACK(size,0));
+
     add_to_free_list(bp);
+    printf("add_to_free being called in free()\n");
+    printf("free - bp: %p\n", bp);
+    printf("free - addr of prev: %p\n", PREV_FR_BP(bp));
+    printf("free - addr of next: %p\n", NEXT_FR_BP(bp));
     coalesce(bp);
 }
 
@@ -300,6 +361,7 @@ void mm_free(void *bp)
  **********************************************************/
 void *mm_malloc(size_t size)
 {
+    printf("\n MALLOC CALLED \n\n");
     size_t asize; /* adjusted block size */
     size_t extendsize; /* amount to extend heap if no fit */
     char * bp;
@@ -315,7 +377,11 @@ void *mm_malloc(size_t size)
         asize = DSIZE * ((size + (DSIZE) + (DSIZE-1))/ DSIZE);
 
     /* Search the free list for a fit */
+
     if ((bp = find_fit(asize)) != NULL) {
+        printf("malloc - bp: %p\n", bp);
+        printf("malloc - addr of prev: %p\n", PREV_FR_BP(bp));
+        printf("malloc - addr of next: %p\n", NEXT_FR_BP(bp));
         split_and_place(bp, asize);
         //place(bp, asize);
         return bp;
@@ -334,9 +400,12 @@ void *mm_malloc(size_t size)
 /**********************************************************
  * mm_realloc
  * Implemented simply in terms of mm_malloc and mm_free
+ * Can be made made quicker by checking if the space following
+ * the current location has space to extend this block
  *********************************************************/
 void *mm_realloc(void *ptr, size_t size)
 {
+    printf("\n REALLOC CALLED \n\n");
     /* If size == 0 then this is just free, and we return NULL. */
     if(size == 0){
       mm_free(ptr);
@@ -350,7 +419,6 @@ void *mm_realloc(void *ptr, size_t size)
     void *newptr;
     size_t copySize;
 
-    newptr = mm_malloc(size);
     if (newptr == NULL)
       return NULL;
 
