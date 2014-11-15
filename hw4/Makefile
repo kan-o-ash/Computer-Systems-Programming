@@ -1,6 +1,6 @@
 
 CC = g++-4.7
-CFLAGS = -O3
+CFLAGS = -lpthread -O3
 
 all: randtrack 
 
