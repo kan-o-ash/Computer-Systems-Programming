@@ -28,6 +28,7 @@ team_t team = {
 
 unsigned num_threads;
 unsigned samples_to_skip;
+pthread_mutex_t lock;
 
 class sample;
 
@@ -59,6 +60,7 @@ main (int argc, char* argv[]){
     unsigned key;
     sample *s;
 
+
     // Print out team information
     printf( "Team Name: %s\n", team.team );
     printf( "\n" );
@@ -79,6 +81,12 @@ main (int argc, char* argv[]){
     sscanf(argv[1], " %d", &num_threads); // not used in this single-threaded version
     sscanf(argv[2], " %d", &samples_to_skip);
 
+    if (pthread_mutex_init(&lock, NULL) != 0)
+    {
+        printf("\n mutex init failed\n");
+        return 1;
+    }
+
     // initialize a 16K-entry (2**14) hash of empty lists
     h.setup(14);
 
@@ -96,6 +104,8 @@ main (int argc, char* argv[]){
         pthread_join(thrd[i], NULL);
     }
 
+    pthread_mutex_destroy(&lock);
+
     // print a list of the frequency of all samples
     h.print();
 }
@@ -110,9 +120,11 @@ void *collect_sample (void* idx) {
     unsigned key;
     sample *s;
 
+    pthread_mutex_lock(&lock);
+    int start = index * (NUM_SEED_STREAMS/num_threads);
     // process streams starting with different initial numbers
     for (i=0; i<NUM_SEED_STREAMS/num_threads; i++){
-        rnum = index+i;
+        rnum = start+i;
 
         // collect a number of samples
         for (j=0; j<SAMPLES_TO_COLLECT; j++){
@@ -137,4 +149,6 @@ void *collect_sample (void* idx) {
             s->count++;
         }
     }
+
+    pthread_mutex_unlock(&lock);
 }
