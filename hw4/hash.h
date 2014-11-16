@@ -14,6 +14,7 @@ template<class Ele, class Keytype> class hash {
   unsigned my_size_log;
   unsigned my_size;
   unsigned my_size_mask;
+  pthread_mutex_t *list_locks;
   list<Ele,Keytype> *entries;
   list<Ele,Keytype> *get_list(unsigned the_idx);
 
@@ -24,6 +25,8 @@ template<class Ele, class Keytype> class hash {
   void print(FILE *f=stdout);
   void reset();
   void cleanup();
+  void lock_list(Keytype the_key);
+  void unlock_list(Keytype the_key);
 };
 
 template<class Ele, class Keytype> 
@@ -33,6 +36,15 @@ hash<Ele,Keytype>::setup(unsigned the_size_log){
   my_size = 1 << my_size_log;
   my_size_mask = (1 << my_size_log) - 1;
   entries = new list<Ele,Keytype>[my_size];
+  int i;
+  list_locks = (pthread_mutex_t *) malloc(sizeof(pthread_mutex_t)*my_size);
+  if (list_locks == NULL) return ;
+  for (i = 0; i < my_size; i++) {
+    if (pthread_mutex_init(&list_locks[i], NULL) != 0)
+    {
+      return;
+    }
+  }
 }
 
 template<class Ele, class Keytype> 
@@ -87,5 +99,18 @@ hash<Ele,Keytype>::insert(Ele *e){
   entries[HASH_INDEX(e->key(),my_size_mask)].push(e);
 }
 
+template<class Ele, class Keytype> 
+void 
+hash<Ele,Keytype>::lock_list(Keytype the_key){
+  int hash_ind = HASH_INDEX(the_key, my_size_mask);
+  pthread_mutex_lock(&list_locks[hash_ind]);
+}
+
+template<class Ele, class Keytype> 
+void 
+hash<Ele,Keytype>::unlock_list(Keytype the_key){
+  int hash_ind = HASH_INDEX(the_key, my_size_mask);
+  pthread_mutex_unlock(&list_locks[hash_ind]);
+}
 
 #endif

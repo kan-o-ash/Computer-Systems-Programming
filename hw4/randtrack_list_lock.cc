@@ -28,7 +28,6 @@ team_t team = {
 
 unsigned num_threads;
 unsigned samples_to_skip;
-pthread_mutex_t lock[RAND_NUM_UPPER_BOUND];
 
 class sample;
 
@@ -81,14 +80,6 @@ main (int argc, char* argv[]){
     sscanf(argv[1], " %d", &num_threads); // not used in this single-threaded version
     sscanf(argv[2], " %d", &samples_to_skip);
 
-    for ( i = 0; i < RAND_NUM_UPPER_BOUND; i++) { 
-        if (pthread_mutex_init(&lock[i], NULL) != 0)
-        {
-            printf("\n mutex init failed\n");
-            return 1;
-        }
-    }
-
     // initialize a 16K-entry (2**14) hash of empty lists
     h.setup(14);
 
@@ -104,10 +95,6 @@ main (int argc, char* argv[]){
 
     for ( i = 0; i < num_threads; i++) {
         pthread_join(thrd[i], NULL);
-    }
-
-    for (i = 0; i < RAND_NUM_UPPER_BOUND; i++) {
-        pthread_mutex_destroy(&lock[i]);
     }
 
     // print a list of the frequency of all samples
@@ -140,7 +127,7 @@ void *collect_sample (void* idx) {
             // force the sample to be within the range of 0..RAND_NUM_UPPER_BOUND-1
             key = rnum % RAND_NUM_UPPER_BOUND;
 
-            pthread_mutex_lock(&lock[key]);
+            h.lock_list(key);
             // if this sample has not been counted before
             if (!(s = h.lookup(key))){
 
@@ -151,7 +138,7 @@ void *collect_sample (void* idx) {
 
             // increment the count for the sample
             s->count++;
-            pthread_mutex_unlock(&lock[key]);
+            h.unlock_list(key);
         }
     }
 
