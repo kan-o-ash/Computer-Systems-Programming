@@ -120,7 +120,6 @@ void *collect_sample (void* idx) {
     unsigned key;
     sample *s;
 
-    pthread_mutex_lock(&lock);
     int start = index * (NUM_SEED_STREAMS/num_threads);
     // process streams starting with different initial numbers
     for (i=0; i<NUM_SEED_STREAMS/num_threads; i++){
@@ -137,6 +136,7 @@ void *collect_sample (void* idx) {
             // force the sample to be within the range of 0..RAND_NUM_UPPER_BOUND-1
             key = rnum % RAND_NUM_UPPER_BOUND;
 
+            pthread_mutex_lock(&lock);
             // if this sample has not been counted before
             if (!(s = h.lookup(key))){
 
@@ -147,8 +147,8 @@ void *collect_sample (void* idx) {
 
             // increment the count for the sample
             s->count++;
+            pthread_mutex_unlock(&lock);
         }
     }
 
-    pthread_mutex_unlock(&lock);
 }
