@@ -109,10 +109,10 @@ void *collect_sample (void* idx) {
     int rnum;
     unsigned key;
     sample *s;
-
+    start = index * (NUM_SEED_STREAMS/num_threads);
     // process streams starting with different initial numbers
     for (i=0; i<NUM_SEED_STREAMS/num_threads; i++){
-        rnum = index+i;
+        rnum = start + i;
 
         // collect a number of samples
         for (j=0; j<SAMPLES_TO_COLLECT; j++){
