@@ -2,6 +2,7 @@
  * life.c
  * Parallelized and optimized implementation of the game of life resides here
  ****************************************************************************/
+#include <pthread.h>
 #include "life.h"
 #include "util.h"
 
@@ -21,17 +22,8 @@
 
 #define BOARD( __board, __i, __j )  (__board[(__i) + LDA*(__j)])
 
-
-    char*
-game_of_life (char* outboard, 
-        char* inboard,
-        const int nrows,
-        const int ncols,
-        const int gens_max)
+char *do_game_of_life()
 {
-    /* HINT: in the parallel decomposition, LDA may not be equal to
-       nrows! */
-    pthread_t threads[NUM_THREADS];
 
     const int LDA = nrows;
     int curgen, i, j;
@@ -73,6 +65,41 @@ game_of_life (char* outboard,
      * free the same one twice!!! 
      */
     return inboard;
+}
+
+
+    char*
+game_of_life (char* outboard, 
+        char* inboard,
+        const int nrows,
+        const int ncols,
+        const int gens_max,
+        const int t_num)
+{
+    /* HINT: in the parallel decomposition, LDA may not be equal to
+       nrows! */
+    const int num_threads = 4;
+    pthread_mutex_t lock[gens_max];
+
+    // initialize locks
+    for ( i = 0; i < gens_max; i++) { 
+      if (pthread_mutex_init(&lock[i], NULL) != 0)
+      {
+          printf("\n mutex init failed\n");
+          return 1;
+      }
+    }
+
+    pthread_t thrd[num_threads];
+    int index[num_threads];
+
+    for ( i = 0; i < num_threads; i++) {
+      index[i] = i;
+      rc = pthread_create(&thrd[i], NULL, do_game_of_life, (void *) &(index[i]));
+      assert(0 == rc);
+    }
+
+    
 }
 
 
