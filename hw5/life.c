@@ -31,6 +31,8 @@ game_of_life (char* outboard,
 {
     /* HINT: in the parallel decomposition, LDA may not be equal to
        nrows! */
+    pthread_t threads[NUM_THREADS];
+
     const int LDA = nrows;
     int curgen, i, j;
 
@@ -38,14 +40,14 @@ game_of_life (char* outboard,
     {
         /* HINT: you'll be parallelizing these loop(s) by doing a
            geometric decomposition of the output */
-        for (i = 0; i < nrows; i++)
+        for (j = 0; j < nrows; j++)
         {
-            const int inorth = mod (i-1, nrows);
-            const int isouth = mod (i+1, nrows);
-            for (j = 0; j < ncols; j++)
+            const int jwest = mod (j-1, ncols);
+            const int jeast = mod (j+1, ncols);
+            for (i = 0; i < ncols; i++)
             {
-                const int jwest = mod (j-1, ncols);
-                const int jeast = mod (j+1, ncols);
+                const int inorth = mod (i-1, nrows);
+                const int isouth = mod (i+1, nrows);
 
                 const char neighbor_count = 
                     BOARD (inboard, inorth, jwest) + 
