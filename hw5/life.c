@@ -24,6 +24,9 @@
 
 #define NUM_THREADS 4
 
+#define MODU(x,m) ((x < 0) ? ((x % m) + m) : (x % m))
+#define modul(x,m) (x < 0) ? ((x & (m -1)) + m) : (x & (m - 1))
+
 struct ThreadParams {
     int index;
     char* outboard;
@@ -50,6 +53,7 @@ do_game_of_life(void* context)
     const int LDA = nrows;
     int curgen, i, j;
 
+
     for (curgen = 0; curgen < gens_max; curgen++)
     {
         /* HINT: you'll be parallelizing these loop(s) by doing a
@@ -57,12 +61,20 @@ do_game_of_life(void* context)
         for (j = 0; j < nrows/NUM_THREADS; j++)
         {
             int new_j = j + (index * nrows/NUM_THREADS);
-            const int jwest = mod (new_j-1, ncols);
-            const int jeast = mod (new_j+1, ncols);
+            const int jwest = MODU (new_j-1, ncols);
+            const int jeast = MODU (new_j+1, ncols);
             for (i = 0; i < ncols; i++)
             {
-                const int inorth = mod (i-1, nrows);
-                const int isouth = mod (i+1, nrows);
+                // if (MODU(i-1,nrows) != mod(i-1,nrows))
+                    // printf("shit 1 is fucked: %d\n",i-1);
+                int test1 = MODU(i-1,nrows);
+                int test2 = modul(i-1,nrows);
+                if ( test1 != test2)
+                    printf("shit 2 is fucked: %d, %d\n",test1,test2);
+
+
+                const int inorth = MODU (i-1, nrows);
+                const int isouth = MODU (i+1, nrows);
 
                 const char neighbor_count = 
                     BOARD (inboard, inorth, jwest) + 
