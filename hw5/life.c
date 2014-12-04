@@ -2,9 +2,9 @@
  * life.c
  * Parallelized and optimized implementation of the game of life resides here
  ****************************************************************************/
-#include <pthread.h>
 #include "life.h"
 #include "util.h"
+#include <pthread.h>
 
 /*****************************************************************************
  * Helper function definitions
@@ -22,8 +22,30 @@
 
 #define BOARD( __board, __i, __j )  (__board[(__i) + LDA*(__j)])
 
-char *do_game_of_life()
+#define NUM_THREADS 4
+
+struct ThreadParams {
+    int index;
+    char* outboard;
+    char* inboard;
+    int nrows;
+    int ncols;
+    int gens_max;
+};
+
+pthread_barrier_t barr;
+
+void *
+do_game_of_life(void* context)
 {
+
+    struct ThreadParams *params = context; 
+    int index = params->index;
+    char* outboard = params->outboard;
+    char* inboard = params->inboard;
+    const int nrows = params->nrows;
+    const int ncols = params->ncols;
+    const int gens_max = params->gens_max;
 
     const int LDA = nrows;
     int curgen, i, j;
@@ -32,10 +54,11 @@ char *do_game_of_life()
     {
         /* HINT: you'll be parallelizing these loop(s) by doing a
            geometric decomposition of the output */
-        for (j = 0; j < nrows; j++)
+        for (j = 0; j < nrows/NUM_THREADS; j++)
         {
-            const int jwest = mod (j-1, ncols);
-            const int jeast = mod (j+1, ncols);
+            int new_j = j + (index * nrows/NUM_THREADS);
+            const int jwest = mod (new_j-1, ncols);
+            const int jeast = mod (new_j+1, ncols);
             for (i = 0; i < ncols; i++)
             {
                 const int inorth = mod (i-1, nrows);
@@ -43,62 +66,69 @@ char *do_game_of_life()
 
                 const char neighbor_count = 
                     BOARD (inboard, inorth, jwest) + 
-                    BOARD (inboard, inorth, j) + 
+                    BOARD (inboard, inorth, new_j) + 
                     BOARD (inboard, inorth, jeast) + 
                     BOARD (inboard, i, jwest) +
                     BOARD (inboard, i, jeast) + 
                     BOARD (inboard, isouth, jwest) +
-                    BOARD (inboard, isouth, j) + 
+                    BOARD (inboard, isouth, new_j) + 
                     BOARD (inboard, isouth, jeast);
 
-                BOARD(outboard, i, j) = alivep (neighbor_count, BOARD (inboard, i, j));
-
+                BOARD(outboard, i, new_j) = alivep (neighbor_count, BOARD (inboard, i, new_j));
             }
         }
+        int rc = pthread_barrier_wait(&barr);
+        if (rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD) {
+            return NULL;
+        }
         SWAP_BOARDS( outboard, inboard );
-
     }
+
+        //Wait for all threads to complet this generation
     /* 
      * We return the output board, so that we know which one contains
      * the final result (because we've been swapping boards around).
      * Just be careful when you free() the two boards, so that you don't
      * free the same one twice!!! 
      */
-    return inboard;
 }
 
 
-    char*
-game_of_life (char* outboard, 
+char* game_of_life (char* outboard, 
         char* inboard,
         const int nrows,
         const int ncols,
-        const int gens_max,
-        const int t_num)
+        const int gens_max)
 {
     /* HINT: in the parallel decomposition, LDA may not be equal to
        nrows! */
-    const int num_threads = 4;
-    pthread_mutex_t lock[gens_max];
 
-    // initialize locks
-    for ( i = 0; i < gens_max; i++) { 
-      if (pthread_mutex_init(&lock[i], NULL) != 0)
-      {
-          printf("\n mutex init failed\n");
-          return 1;
-      }
+    //Initialize Barrier
+    if (pthread_barrier_init(&barr, NULL, NUM_THREADS)) {
+        return NULL;
     }
 
-    pthread_t thrd[num_threads];
-    int index[num_threads];
+    pthread_t thrd[NUM_THREADS];
+    struct ThreadParams params[NUM_THREADS];
 
-    for ( i = 0; i < num_threads; i++) {
-      index[i] = i;
-      rc = pthread_create(&thrd[i], NULL, do_game_of_life, (void *) &(index[i]));
-      assert(0 == rc);
+    int i;
+
+    for ( i = 0; i < NUM_THREADS; i++) {
+        params[i].index = i;
+        params[i].outboard = outboard;
+        params[i].inboard = inboard;
+        params[i].nrows = nrows;
+        params[i].ncols = ncols;
+        params[i].gens_max = gens_max;
+        int rc = pthread_create(&thrd[i], NULL, do_game_of_life, (void *) &(params[i]));
+        //assert(0 == rc);
     }
-
+    
+    for ( i = 0; i <NUM_THREADS; i++){
+        pthread_join(thrd[i], NULL);
+    }
+    //all threads have completed all generations
+    return inboard;
     
 }
 
