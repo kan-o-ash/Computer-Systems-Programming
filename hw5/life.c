@@ -59,12 +59,28 @@ do_game_of_life(void* context)
             int new_j = j + (index * nrows/NUM_THREADS);
             const int jwest = mod (new_j-1, ncols);
             const int jeast = mod (new_j+1, ncols);
-            for (i = 0; i < ncols; i++)
-            {
-                const int inorth = mod (i-1, nrows);
-                const int isouth = mod (i+1, nrows);
 
-                const char neighbor_count = 
+            int inorth = nrows - 1;
+            int isouth = 1;
+            char neighbor_count = 
+                BOARD (inboard, inorth, jwest) + 
+                BOARD (inboard, inorth, new_j) + 
+                BOARD (inboard, inorth, jeast) + 
+                BOARD (inboard, 0, jwest) +
+                BOARD (inboard, 0, jeast) + 
+                BOARD (inboard, isouth, jwest) +
+                BOARD (inboard, isouth, new_j) + 
+                BOARD (inboard, isouth, jeast);
+
+            char board_val = BOARD (inboard, 0, new_j); 
+            BOARD(outboard, 0, new_j) = (! board_val && (neighbor_count == (char) 3)) || (board_val && (neighbor_count >= 2) && (neighbor_count <= 3)); 
+
+            for (i = 1; i < ncols - 1; i++)
+            {
+                inorth = i-1;
+                isouth = i+1;
+
+                neighbor_count = 
                     BOARD (inboard, inorth, jwest) + 
                     BOARD (inboard, inorth, new_j) + 
                     BOARD (inboard, inorth, jeast) + 
@@ -74,8 +90,25 @@ do_game_of_life(void* context)
                     BOARD (inboard, isouth, new_j) + 
                     BOARD (inboard, isouth, jeast);
 
-                BOARD(outboard, i, new_j) = alivep (neighbor_count, BOARD (inboard, i, new_j));
+            board_val = BOARD (inboard, i, new_j); 
+            BOARD(outboard, i, new_j) = (! board_val && (neighbor_count == (char) 3)) || (board_val && (neighbor_count >= 2) && (neighbor_count <= 3)); 
             }
+
+            inorth = nrows - 2;
+            isouth = 0;
+
+            neighbor_count = 
+                BOARD (inboard, inorth, jwest) + 
+                BOARD (inboard, inorth, new_j) + 
+                BOARD (inboard, inorth, jeast) + 
+                BOARD (inboard, (nrows - 1), jwest) +
+                BOARD (inboard, (nrows - 1), jeast) + 
+                BOARD (inboard, isouth, jwest) +
+                BOARD (inboard, isouth, new_j) + 
+                BOARD (inboard, isouth, jeast);
+
+            board_val = BOARD (inboard, (nrows - 1), new_j); 
+            BOARD(outboard, nrows - 1, new_j) = (! board_val && (neighbor_count == (char) 3)) || (board_val && (neighbor_count >= 2) && (neighbor_count <= 3)); 
         }
         int rc = pthread_barrier_wait(&barr);
         if (rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD) {
